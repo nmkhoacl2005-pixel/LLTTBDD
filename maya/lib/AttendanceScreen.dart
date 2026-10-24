@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'BluetoothService.dart';
+import 'CheckInHandler.dart';
 import 'CommonWidgets.dart';
 import 'EmployeeRepository.dart';
 import 'WorkSchedule.dart';
 
-/// Tab 1: nhận mã từ Máy B -> hiện tên + giờ chấm công
+/// Tab 1: nhận kết quả chấm công từ điện thoại nhân viên (BLE) -> hiện tên + giờ
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
 
@@ -17,18 +17,17 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   final _repo = EmployeeRepository.instance;
   final _schedule = WorkSchedule.instance;
-  StreamSubscription<String>? _sub;
+  StreamSubscription<ScanResult>? _sub;
 
   AttendanceRecord? _last;
   bool _alreadyDone = false;
-  String? _invalidCode;
   Timer? _resetTimer;
   List<AttendanceRecord> _history = [];
 
   @override
   void initState() {
     super.initState();
-    _sub = BluetoothService.instance.scans.listen(_onScan);
+    _sub = CheckInHandler.instance.results.listen(_onResult);
     _loadHistory();
   }
 
@@ -37,28 +36,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (mounted) setState(() => _history = list);
   }
 
-  Future<void> _onScan(String code) async {
-    final name = await _repo.getName(code);
-    final ScanResult? result =
-    name == null ? null : await _repo.addScan(code, name, DateTime.now());
+  Future<void> _onResult(ScanResult result) async {
     final list = await _repo.history();
     if (!mounted) return;
     setState(() {
       _history = list;
-      if (result != null) {
-        _last = result.record;
-        _alreadyDone = result.alreadyDone;
-        _invalidCode = null;
-      } else {
-        _last = null;
-        _alreadyDone = false;
-        _invalidCode = code;
-      }
+      _last = result.record;
+      _alreadyDone = result.alreadyDone;
     });
     _startResetTimer();
   }
 
-  /// Sau 5 giây tự xóa thông báo, quay về trạng thái chờ quét
+  /// Sau 5 giây tự xóa thông báo, quay về trạng thái chờ
   void _startResetTimer() {
     _resetTimer?.cancel();
     _resetTimer = Timer(const Duration(seconds: 5), () {
@@ -66,7 +55,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       setState(() {
         _last = null;
         _alreadyDone = false;
-        _invalidCode = null;
       });
     });
   }
@@ -119,11 +107,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildResult() {
-    if (_invalidCode != null) return InvalidCodeCard(code: _invalidCode!);
     if (_last == null) {
       return const ScanPlaceholder(
-        icon: Icons.qr_code_scanner,
-        text: "Đang chờ Máy B quét mã nhân viên...",
+        icon: Icons.bluetooth_searching,
+        text: "Đang chờ nhân viên chấm công...\n(bấm \"Mở máy trạm\" nếu chưa mở)",
       );
     }
 

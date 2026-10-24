@@ -5,6 +5,9 @@ String two(int n) => n.toString().padLeft(2, '0');
 String formatTime(DateTime t) => "${two(t.hour)}:${two(t.minute)}:${two(t.second)}";
 String formatDate(DateTime t) => "${two(t.day)}/${two(t.month)}/${t.year}";
 
+/// Mật khẩu nhân viên tối thiểu bao nhiêu ký tự
+const int kMinPasswordLength = 6;
+
 /// Chữ cái đầu của tên (dùng cho avatar)
 String initialOf(String name) {
   final parts = name.trim().split(RegExp(r'\s+'));
@@ -12,17 +15,26 @@ String initialOf(String name) {
   return last.isEmpty ? '?' : last[0].toUpperCase();
 }
 
-/// Thanh trạng thái kết nối Bluetooth với Máy B
+/// Thanh trạng thái máy trạm: đóng / đang mở chờ nhân viên / có nhân viên kết nối
 class ConnectionStatusCard extends StatelessWidget {
   const ConnectionStatusCard({super.key});
 
   @override
   Widget build(BuildContext context) {
     final bt = BluetoothService.instance;
-    return ValueListenableBuilder<bool>(
-      valueListenable: bt.connected,
-      builder: (context, isConnected, _) {
-        final MaterialColor color = isConnected ? Colors.green : Colors.orange;
+    return ListenableBuilder(
+      listenable: Listenable.merge([bt.running, bt.connected, bt.status]),
+      builder: (context, _) {
+        final running = bt.running.value;
+        final isConnected = bt.connected.value;
+        final MaterialColor color = !running
+            ? Colors.grey
+            : (isConnected ? Colors.green : Colors.orange);
+        final IconData icon = !running
+            ? Icons.bluetooth_disabled
+            : (isConnected
+            ? Icons.bluetooth_connected
+            : Icons.bluetooth_searching);
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -32,22 +44,14 @@ class ConnectionStatusCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                isConnected
-                    ? Icons.bluetooth_connected
-                    : Icons.bluetooth_searching,
-                color: color,
-              ),
+              Icon(icon, color: color),
               const SizedBox(width: 12),
               Expanded(
-                child: ValueListenableBuilder<String>(
-                  valueListenable: bt.status,
-                  builder: (_, s, __) => Text(
-                    s,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: color.shade800,
-                    ),
+                child: Text(
+                  bt.status.value,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: color.shade800,
                   ),
                 ),
               ),
@@ -59,7 +63,50 @@ class ConnectionStatusCard extends StatelessWidget {
   }
 }
 
-/// Khung chờ quét mã
+/// Ô chọn nhân viên từ danh sách (dùng cho tab Sửa và Xóa)
+class EmployeePicker extends StatelessWidget {
+  final List<MapEntry<String, String>> employees;
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  const EmployeePicker({
+    super.key,
+    required this.employees,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      key: ValueKey(value), // đổi key để ô chọn cập nhật khi value đổi từ code
+      value: value,
+      isExpanded: true,
+      hint: const Text("Chọn nhân viên"),
+      decoration: InputDecoration(
+        labelText: "Nhân viên",
+        prefixIcon: const Icon(Icons.person_search),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      items: employees
+          .map((e) => DropdownMenuItem(
+        value: e.key,
+        child: Text(
+          "${e.value} (${e.key})",
+          overflow: TextOverflow.ellipsis,
+        ),
+      ))
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+}
+
+/// Khung placeholder (chờ chấm công / chưa có dữ liệu...)
 class ScanPlaceholder extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -95,7 +142,7 @@ class ScanPlaceholder extends StatelessWidget {
   }
 }
 
-/// Thẻ báo mã QR không hợp lệ / không tồn tại
+/// Thẻ báo mã không hợp lệ / không tồn tại
 class InvalidCodeCard extends StatelessWidget {
   final String code;
   final String? hint; // dòng gợi ý thêm (tuỳ chọn)
@@ -116,7 +163,7 @@ class InvalidCodeCard extends StatelessWidget {
           const Icon(Icons.error_outline, size: 56, color: Colors.red),
           const SizedBox(height: 12),
           const Text(
-            "Mã QR không hợp lệ!",
+            "Mã không hợp lệ!",
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,

@@ -6,6 +6,7 @@ import 'DeleteEmployeeScreen.dart';
 import 'EditEmployeeScreen.dart';
 import 'MonthlyReportScreen.dart';
 import 'ScheduleSettingsScreen.dart';
+import 'DuplicateDeviceScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  // Chỉ màn hình đang chọn được build -> chỉ màn đó nhận mã QR từ Máy B
+  // Chỉ màn hình đang chọn được build
   final List<Widget> _widgetOptions = const <Widget>[
     AttendanceScreen(), // giao diện chấm công (tên + giờ)
     AddEmployeeScreen(), // giao diện thêm nhân viên mới
@@ -25,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
     DeleteEmployeeScreen(), // giao diện xóa nhân viên
     MonthlyReportScreen(), // giao diện chi tiết chấm công theo tháng
     ScheduleSettingsScreen(), // giao diện cài đặt giờ làm
+    DuplicateDeviceScreen(),
   ];
 
   final List<String> _titles = const [
@@ -34,13 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
     'Xóa nhân viên',
     'Báo cáo tháng',
     'Giờ làm việc',
+    'Cảnh báo trùng máy',
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    BluetoothService.instance.start(); // mở Bluetooth Server 1 lần
-  }
 
   void _onItemTapped(int index) {
     // hàm chuyển đổi giữa các tab
@@ -55,11 +52,32 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  /// Nút Mở / Đóng máy trạm trên thanh tiêu đề
+  Widget _stationButton() {
+    final bt = BluetoothService.instance;
+    return ValueListenableBuilder<bool>(
+      valueListenable: bt.running,
+      builder: (context, running, _) => TextButton.icon(
+        onPressed: () => running ? bt.stop() : bt.start(),
+        icon: Icon(
+          running ? Icons.stop_circle_outlined : Icons.play_circle_outline,
+          color: Colors.white,
+          size: 20,
+        ),
+        label: Text(
+          running ? "Đóng máy trạm" : "Mở máy trạm",
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
+        actions: [_stationButton()],
       ),
       body: _widgetOptions.elementAt(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
@@ -88,6 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.schedule),
             label: 'Giờ làm',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.warning_amber_rounded),
+            label: 'Trùng máy',
           ),
         ],
         currentIndex: _selectedIndex,

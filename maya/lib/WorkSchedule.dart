@@ -22,24 +22,19 @@ class WorkSchedule {
 
   /// Nạp giờ làm đã lưu trong SQLite (gọi 1 lần trong main)
   Future<void> load() async {
-    final repo = EmployeeRepository.instance;
-    final inMin = int.tryParse(await repo.getSetting('check_in_minutes') ?? '');
-    final outMin =
-        int.tryParse(await repo.getSetting('check_out_minutes') ?? '');
-    if (inMin != null) {
+    try {
+      final j = await EmployeeRepository.instance.getSchedule();
+      final inMin = j['checkInMinutes'] as int;
+      final outMin = j['checkOutMinutes'] as int;
       checkInTime = TimeOfDay(hour: inMin ~/ 60, minute: inMin % 60);
-    }
-    if (outMin != null) {
       checkOutTime = TimeOfDay(hour: outMin ~/ 60, minute: outMin % 60);
+    } catch (_) {
+      // backend chưa mở thì dùng giờ mặc định
     }
   }
 
-  Future<void> save() async {
-    final repo = EmployeeRepository.instance;
-    await repo.setSetting('check_in_minutes', toMinutes(checkInTime).toString());
-    await repo.setSetting(
-        'check_out_minutes', toMinutes(checkOutTime).toString());
-  }
+  Future<void> save() => EmployeeRepository.instance
+      .setSchedule(toMinutes(checkInTime), toMinutes(checkOutTime));
 
   bool isLate(DateTime t) => _minutesOf(t) > toMinutes(checkInTime);
   bool isEarlyLeave(DateTime t) => _minutesOf(t) < toMinutes(checkOutTime);

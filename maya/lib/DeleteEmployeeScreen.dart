@@ -1,11 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'BluetoothService.dart';
 import 'CommonWidgets.dart';
 import 'EmployeeRepository.dart';
 
-/// Tab 3: quét mã -> hỏi xác nhận -> xác nhận mới xóa
+/// Tab 4: chọn nhân viên từ danh sách -> hỏi xác nhận -> xác nhận mới xóa
 class DeleteEmployeeScreen extends StatefulWidget {
   const DeleteEmployeeScreen({super.key});
 
@@ -15,41 +12,33 @@ class DeleteEmployeeScreen extends StatefulWidget {
 
 class _DeleteEmployeeScreenState extends State<DeleteEmployeeScreen> {
   final _repo = EmployeeRepository.instance;
-  StreamSubscription<String>? _sub;
 
-  bool _dialogOpen = false;
+  List<MapEntry<String, String>> _employees = [];
+  String? _code; // nhân viên đang chọn
   int _count = 0;
-  String? _invalidCode;
   String? _deletedName;
   String? _deletedCode;
 
   @override
   void initState() {
     super.initState();
-    _sub = BluetoothService.instance.scans.listen(_onScan);
-    _loadCount();
+    _loadEmployees();
   }
 
-  Future<void> _loadCount() async {
-    final c = await _repo.count();
-    if (mounted) setState(() => _count = c);
-  }
-
-  Future<void> _onScan(String code) async {
-    if (_dialogOpen) return; // đang xử lý/hiện hộp thoại -> bỏ qua mã quét thêm
-    _dialogOpen = true;
-
-    final name = await _repo.getName(code);
+  Future<void> _loadEmployees() async {
+    final list = await _repo.employees();
     if (!mounted) return;
-    if (name == null) {
-      _dialogOpen = false;
-      setState(() {
-        _invalidCode = code;
-        _deletedName = null;
-        _deletedCode = null;
-      });
-      return;
-    }
+    setState(() {
+      _employees = list;
+      _count = list.length;
+    });
+  }
+
+  Future<void> _delete() async {
+    final code = _code;
+    if (code == null) return;
+    final name = await _repo.getName(code);
+    if (!mounted || name == null) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -87,17 +76,17 @@ class _DeleteEmployeeScreenState extends State<DeleteEmployeeScreen> {
         ],
       ),
     );
-    _dialogOpen = false;
 
     if (!mounted) return;
 
     if (confirmed == true) {
       await _repo.delete(code);
-      final c = await _repo.count();
+      final list = await _repo.employees();
       if (!mounted) return;
       setState(() {
-        _count = c;
-        _invalidCode = null;
+        _employees = list;
+        _count = list.length;
+        _code = null;
         _deletedName = name;
         _deletedCode = code;
       });
@@ -111,15 +100,7 @@ class _DeleteEmployeeScreenState extends State<DeleteEmployeeScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _sub?.cancel();
-    super.dispose();
-  }
-
   Widget _buildResult() {
-    if (_invalidCode != null) return InvalidCodeCard(code: _invalidCode!);
-
     if (_deletedName != null) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
@@ -156,8 +137,8 @@ class _DeleteEmployeeScreenState extends State<DeleteEmployeeScreen> {
     }
 
     return const ScanPlaceholder(
-      icon: Icons.qr_code_scanner,
-      text: "Quét mã nhân viên bên Máy B\nđể xóa (sẽ có bước xác nhận)",
+      icon: Icons.delete_outline,
+      text: "Chọn nhân viên cần xóa ở trên\n(sẽ có bước xác nhận)",
     );
   }
 
@@ -168,8 +149,6 @@ class _DeleteEmployeeScreenState extends State<DeleteEmployeeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const ConnectionStatusCard(),
-          const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerRight,
             child: Chip(
@@ -178,7 +157,33 @@ class _DeleteEmployeeScreenState extends State<DeleteEmployeeScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          _buildResult(),
+          if (_employees.isEmpty)
+            const ScanPlaceholder(
+              icon: Icons.people_outline,
+              text: "Chưa có nhân viên nào",
+            )
+          else ...[
+            EmployeePicker(
+              employees: _employees,
+              value: _code,
+              onChanged: (v) => setState(() => _code = v),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _code == null ? null : _delete,
+              icon: const Icon(Icons.delete),
+              label: const Text("Xóa nhân viên"),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildResult(),
+          ],
         ],
       ),
     );

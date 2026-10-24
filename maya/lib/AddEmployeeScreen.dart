@@ -1,16 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'BluetoothService.dart';
 import 'CommonWidgets.dart';
 import 'EmployeeRepository.dart';
 
 /// Mã nhân viên hợp lệ: chỉ gồm chữ số, dài 10 đến 12 ký tự
 final RegExp _employeeCodeRule = RegExp(r'^\d{10,12}$');
 
-/// Tab 2: quét mã số mới (10-12 chữ số) -> nhập tên -> xác nhận để thêm nhân viên,
-/// hoặc bấm "Thêm thủ công" để tự nhập mã số + tên
+/// Tab 2: bấm "Thêm thủ công" -> nhập mã số + tên + mật khẩu -> lưu nhân viên mới
 class AddEmployeeScreen extends StatefulWidget {
   const AddEmployeeScreen({super.key});
 
@@ -20,21 +16,14 @@ class AddEmployeeScreen extends StatefulWidget {
 
 class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   final _repo = EmployeeRepository.instance;
-  StreamSubscription<String>? _sub;
 
-  bool _busy = false; // đang xử lý / đang hiện hộp thoại -> bỏ qua mã quét thêm
   int _count = 0;
-
-  String? _invalidCode;
-  String? _existsCode;
-  String? _existsName;
   String? _addedCode;
   String? _addedName;
 
   @override
   void initState() {
     super.initState();
-    _sub = BluetoothService.instance.scans.listen(_onScan);
     _loadCount();
   }
 
@@ -43,81 +32,20 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     if (mounted) setState(() => _count = c);
   }
 
-  void _clearResult() {
-    _invalidCode = null;
-    _existsCode = null;
-    _existsName = null;
-    _addedCode = null;
-    _addedName = null;
-  }
-
-  Future<void> _onScan(String code) async {
-    if (_busy) return;
-    _busy = true;
-
-    // 1. Kiểm tra định dạng: 10-12 chữ số
-    if (!_employeeCodeRule.hasMatch(code)) {
-      _busy = false;
-      setState(() {
-        _clearResult();
-        _invalidCode = code;
-      });
-      return;
-    }
-
-    // 2. Mã đã có trong hệ thống?
-    final existing = await _repo.getName(code);
-    if (!mounted) return;
-    if (existing != null) {
-      _busy = false;
-      setState(() {
-        _clearResult();
-        _existsCode = code;
-        _existsName = existing;
-      });
-      return;
-    }
-
-    // 3. Mã mới -> hiện thông báo yêu cầu nhập tên
-    final name = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _NameDialog(code: code),
-    );
-    _busy = false;
-    if (!mounted) return;
-
-    if (name == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Đã hủy thêm nhân viên"),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    // 4. Đã xác nhận -> lưu vào SQLite
-    await _save(code, name);
-  }
-
-  /// Thêm thủ công: nhập cả mã số và tên
+  /// Thêm thủ công: nhập mã số, tên và mật khẩu
   Future<void> _addManually() async {
-    if (_busy) return;
-    _busy = true; // trong lúc nhập tay, bỏ qua mã quét từ Máy B
     final result = await showDialog<_NewEmployee>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const _ManualAddDialog(),
     );
-    _busy = false;
     if (!mounted || result == null) return;
-    await _save(result.code, result.name);
+    await _save(result);
   }
 
-  /// Lưu nhân viên vào SQLite rồi hiện thẻ kết quả (dùng cho cả quét mã và thêm thủ công)
-  Future<void> _save(String code, String name) async {
-    final ok = await _repo.addEmployee(code, name);
+  /// Lưu nhân viên vào SQLite rồi hiện thẻ kết quả
+  Future<void> _save(_NewEmployee e) async {
+    final ok = await _repo.addEmployee(e.code, e.name, password: e.password);
     final c = await _repo.count();
     if (!mounted) return;
 
@@ -133,17 +61,10 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     }
 
     setState(() {
-      _clearResult();
-      _addedCode = code;
-      _addedName = name;
+      _addedCode = e.code;
+      _addedName = e.name;
       _count = c;
     });
-  }
-
-  @override
-  void dispose() {
-    _sub?.cancel();
-    super.dispose();
   }
 
   Widget _resultCard({
@@ -188,21 +109,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   }
 
   Widget _buildResult() {
-    if (_invalidCode != null) {
-      return InvalidCodeCard(
-        code: _invalidCode!,
-        hint: "Mã nhân viên phải gồm 10–12 chữ số",
-      );
-    }
-    if (_existsName != null) {
-      return _resultCard(
-        icon: Icons.info_outline,
-        color: Colors.orange,
-        title: "Mã đã tồn tại",
-        name: _existsName!,
-        code: _existsCode!,
-      );
-    }
     if (_addedName != null) {
       return _resultCard(
         icon: Icons.person_add_alt_1,
@@ -214,7 +120,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     }
     return const ScanPlaceholder(
       icon: Icons.person_add_alt_1,
-      text: "Quét mã số nhân viên mới bên Máy B\n(10–12 chữ số) để thêm vào hệ thống",
+      text: "Bấm \"Thêm thủ công\" để nhập mã số (10–12 chữ số),\ntên và mật khẩu cho nhân viên mới",
     );
   }
 
@@ -225,8 +131,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const ConnectionStatusCard(),
-          const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerRight,
             child: Chip(
@@ -254,97 +158,15 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   }
 }
 
-/// Hộp thoại yêu cầu nhập tên, trả về tên (đã trim) khi bấm Xác nhận, null khi Hủy
-class _NameDialog extends StatefulWidget {
-  final String code;
-
-  const _NameDialog({required this.code});
-
-  @override
-  State<_NameDialog> createState() => _NameDialogState();
-}
-
-class _NameDialogState extends State<_NameDialog> {
-  final _ctrl = TextEditingController();
-  String? _error;
-
-  void _confirm() {
-    final name = _ctrl.text.trim();
-    if (name.isEmpty) {
-      setState(() => _error = "Vui lòng nhập tên nhân viên");
-      return;
-    }
-    Navigator.pop(context, name);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      scrollable: true,
-      icon: Icon(Icons.person_add_alt_1,
-          color: Colors.indigo.shade600, size: 44),
-      title: const Text("Thêm nhân viên mới"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            "Mã số: ${widget.code}",
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "Mã này chưa có trong hệ thống.\nVui lòng nhập tên nhân viên:",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade700),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _ctrl,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _confirm(),
-            decoration: InputDecoration(
-              labelText: "Tên nhân viên",
-              prefixIcon: const Icon(Icons.person_outline),
-              errorText: _error,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ],
-      ),
-      actionsAlignment: MainAxisAlignment.spaceEvenly,
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Hủy"),
-        ),
-        FilledButton(
-          onPressed: _confirm,
-          child: const Text("Xác nhận"),
-        ),
-      ],
-    );
-  }
-}
-
 class _NewEmployee {
   final String code;
   final String name;
+  final String password;
 
-  const _NewEmployee(this.code, this.name);
+  const _NewEmployee(this.code, this.name, this.password);
 }
 
-/// Hộp thoại nhập tay mã số + tên. Trả về _NewEmployee khi Xác nhận, null khi Hủy
+/// Hộp thoại nhập mã số + tên + mật khẩu. Trả về _NewEmployee khi Xác nhận, null khi Hủy
 class _ManualAddDialog extends StatefulWidget {
   const _ManualAddDialog();
 
@@ -355,21 +177,29 @@ class _ManualAddDialog extends StatefulWidget {
 class _ManualAddDialogState extends State<_ManualAddDialog> {
   final _codeCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
   String? _codeError;
   String? _nameError;
+  String? _passError;
   bool _checking = false;
+  bool _hidePass = true;
 
   Future<void> _confirm() async {
     final code = _codeCtrl.text.trim();
     final name = _nameCtrl.text.trim();
+    final pass = _passCtrl.text;
 
     String? codeError;
     String? nameError;
+    String? passError;
     if (!_employeeCodeRule.hasMatch(code)) {
       codeError = "Mã phải gồm 10–12 chữ số";
     }
     if (name.isEmpty) {
       nameError = "Vui lòng nhập tên nhân viên";
+    }
+    if (pass.length < kMinPasswordLength) {
+      passError = "Mật khẩu tối thiểu $kMinPasswordLength ký tự";
     }
 
     if (codeError == null) {
@@ -379,22 +209,24 @@ class _ManualAddDialogState extends State<_ManualAddDialog> {
       if (existing != null) codeError = "Mã đã tồn tại ($existing)";
     }
 
-    if (codeError != null || nameError != null) {
+    if (codeError != null || nameError != null || passError != null) {
       setState(() {
         _checking = false;
         _codeError = codeError;
         _nameError = nameError;
+        _passError = passError;
       });
       return;
     }
 
-    Navigator.pop(context, _NewEmployee(code, name));
+    Navigator.pop(context, _NewEmployee(code, name, pass));
   }
 
   @override
   void dispose() {
     _codeCtrl.dispose();
     _nameCtrl.dispose();
+    _passCtrl.dispose();
     super.dispose();
   }
 
@@ -429,12 +261,31 @@ class _ManualAddDialogState extends State<_ManualAddDialog> {
           TextField(
             controller: _nameCtrl,
             textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _confirm(),
+            textInputAction: TextInputAction.next,
             decoration: InputDecoration(
               labelText: "Tên nhân viên",
               prefixIcon: const Icon(Icons.person_outline),
               errorText: _nameError,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _passCtrl,
+            obscureText: _hidePass,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _confirm(),
+            decoration: InputDecoration(
+              labelText: "Mật khẩu (tối thiểu $kMinPasswordLength ký tự)",
+              prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                icon: Icon(
+                    _hidePass ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _hidePass = !_hidePass),
+              ),
+              errorText: _passError,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
