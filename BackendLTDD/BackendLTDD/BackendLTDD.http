@@ -1,0 +1,6 @@
+@BackendLTDD_HostAddress = http://localhost:5043
+
+GET {{BackendLTDD_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
