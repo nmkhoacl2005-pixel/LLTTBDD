@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'CommonWidgets.dart';
 import 'EmployeeRepository.dart';
+import 'QrScanPage.dart';
 
 /// Tab 3: chọn nhân viên từ danh sách -> sửa tên, đặt lại mật khẩu, hủy liên kết máy
 class EditEmployeeScreen extends StatefulWidget {
@@ -14,6 +16,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   final _repo = EmployeeRepository.instance;
   final _codeCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
+  final _rateCtrl = TextEditingController();
 
   List<MapEntry<String, String>> _employees = [];
   String? _code; // mã nhân viên đang sửa
@@ -35,11 +38,13 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
     if (code == null) return;
     final name = await _repo.getName(code);
     final bound = await _repo.hasDevice(code);
+    final rate = await _repo.getHourlyRate(code);
     if (!mounted || name == null) return;
     setState(() {
       _code = code;
       _codeCtrl.text = code;
       _nameCtrl.text = name;
+      _rateCtrl.text = rate == 0 ? '' : rate.toStringAsFixed(0);
       _bound = bound;
       _nameError = null;
     });
@@ -52,6 +57,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
       return;
     }
     await _repo.updateName(_code!, newName);
+    await _repo.setHourlyRate(_code!, double.tryParse(_rateCtrl.text.trim()) ?? 0);
     await _loadEmployees();
     if (!mounted) return;
     FocusScope.of(context).unfocus();
@@ -112,6 +118,19 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
     _snack("Đã hủy liên kết máy", Colors.green);
   }
 
+  Future<void> _scanQr() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScanPage()),
+    );
+    if (!mounted || code == null) return;
+    if (!_employees.any((e) => e.key == code)) {
+      _snack("Không tìm thấy nhân viên có mã $code", Colors.red);
+      return;
+    }
+    await _select(code);
+  }
+
   void _snack(String text, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -126,6 +145,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   void dispose() {
     _codeCtrl.dispose();
     _nameCtrl.dispose();
+    _rateCtrl.dispose();
     super.dispose();
   }
 
@@ -177,6 +197,19 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                 labelText: "Tên nhân viên",
                 prefixIcon: const Icon(Icons.person_outline),
                 errorText: _nameError,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _rateCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: "Lương theo giờ (VNĐ/giờ)",
+                prefixIcon: const Icon(Icons.payments_outlined),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -281,6 +314,18 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
               employees: _employees,
               value: _code,
               onChanged: _select,
+            ),
+            const SizedBox(height: 8),
+            FilledButton.tonalIcon(
+              onPressed: _scanQr,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text("Quét QR để chọn"),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             if (_code == null)

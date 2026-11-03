@@ -43,6 +43,13 @@ public class EmployeesApiController(IEmployeeRepository repo) : ControllerBase
         return await repo.UpdateNameAsync(code, name) ? NoContent() : NotFound(new { error = "Không tìm thấy nhân viên" });
     }
 
+    [HttpPut("{code}/rate")]
+    public async Task<IActionResult> SetRate(string code, RateRequest r)
+    {
+        if (r.HourlyRate < 0) return BadRequest(new { error = "Lương giờ không hợp lệ" });
+        return await repo.SetHourlyRateAsync(code, r.HourlyRate) ? NoContent() : NotFound(new { error = "Không tìm thấy nhân viên" });
+    }
+
     [HttpDelete("{code}")]
     public async Task<IActionResult> Delete(string code) =>
         await repo.DeleteAsync(code) ? NoContent() : NotFound(new { error = "Không tìm thấy nhân viên" });

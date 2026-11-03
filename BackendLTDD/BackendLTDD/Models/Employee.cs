@@ -11,4 +11,8 @@ public class Employee
     public string? PassHash { get; set; }
     public string? TokenHash { get; set; }
     public string? DeviceId { get; set; }
+    public string? FcmToken { get; set; }
+
+    [Precision(18, 0)]
+    public decimal HourlyRate { get; set; }
 }

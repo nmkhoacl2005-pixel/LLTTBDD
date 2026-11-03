@@ -29,20 +29,37 @@ class ApiClient {
   Uri _uri(String path, [Map<String, String>? query]) =>
       Uri.parse('$baseUrl$path').replace(queryParameters: query);
 
-  Future<dynamic> get(String path, {Map<String, String>? query}) =>
-      _send(() => http.get(_uri(path, query), headers: _headers));
+  static final _client = http.Client(); // dùng chung để giữ kết nối, đỡ bắt tay TCP mỗi lần
 
-  Future<dynamic> post(String path, [Object? body]) => _send(() => http.post(
-        _uri(path),
-        headers: _headers,
-        body: body == null ? null : jsonEncode(body),
-      ));
+  Future<dynamic> get(String path, {Map<String, String>? query}) =>
+      _send(() => _client.get(_uri(path, query), headers: _headers));
+
+  Future<dynamic> post(String path, [Object? body]) => _send(() => _client.post(
+    _uri(path),
+    headers: _headers,
+    body: body == null ? null : jsonEncode(body),
+  ));
 
   Future<dynamic> put(String path, Object body) => _send(
-      () => http.put(_uri(path), headers: _headers, body: jsonEncode(body)));
+          () => _client.put(_uri(path), headers: _headers, body: jsonEncode(body)));
 
   Future<dynamic> delete(String path) =>
-      _send(() => http.delete(_uri(path), headers: _headers));
+      _send(() => _client.delete(_uri(path), headers: _headers));
+
+  /// Tải file nhị phân (xlsx...)
+  Future<List<int>> getBytes(String path, {Map<String, String>? query}) async {
+    try {
+      final res = await http
+          .get(_uri(path, query), headers: _headers)
+          .timeout(const Duration(seconds: 30));
+      if (res.statusCode >= 200 && res.statusCode < 300) return res.bodyBytes;
+      throw ApiException('Lỗi server (${res.statusCode})', res.statusCode);
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw ApiException('Không kết nối được server');
+    }
+  }
 
   Future<dynamic> _send(Future<http.Response> Function() call) async {
     try {

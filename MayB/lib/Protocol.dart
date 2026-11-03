@@ -88,10 +88,12 @@ BleResult parseResponse(String raw) {
 /// 1 ngày công. Giờ tính bằng số giây từ 00:00.
 class DayRecord {
   final int day;
-  final int inSec;
+  final int? inSec; // null = ngày không quét (nghỉ / lễ / vắng)
   final int? outSec; // null = chưa quét ra
   final bool late;
   final bool early;
+  final String kind; // Work | Leave | Holiday | Absent
+  final String label;
 
   const DayRecord({
     required this.day,
@@ -99,7 +101,11 @@ class DayRecord {
     required this.outSec,
     required this.late,
     required this.early,
+    this.kind = 'Work',
+    this.label = '',
   });
+
+  bool get isWork => kind == 'Work';
 }
 
 class ReportPage {
@@ -152,4 +158,134 @@ class ReportResult {
   const ReportResult.fail(this.error)
       : ok = false,
         days = const [];
+}
+
+// ------------------------------------------------------------------ Xin nghỉ
+
+class LeaveItem {
+  final DateTime from;
+  final DateTime to;
+  final String type;
+  final String reason;
+  final String status; // Pending | Approved | Rejected
+
+  const LeaveItem({
+    required this.from,
+    required this.to,
+    required this.type,
+    required this.reason,
+    required this.status,
+  });
+
+  int get days => to.difference(from).inDays + 1;
+}
+
+class LeaveResult {
+  final bool ok;
+  final String? error;
+  final List<LeaveItem> items;
+
+  const LeaveResult.ok(this.items)
+      : ok = true,
+        error = null;
+  const LeaveResult.fail(this.error)
+      : ok = false,
+        items = const [];
+}
+
+// ------------------------------------------------------------------ Thông báo
+
+class AnnouncementItem {
+  final String title;
+  final String body;
+  final DateTime time;
+
+  const AnnouncementItem(
+      {required this.title, required this.body, required this.time});
+}
+
+class AnnouncementResult {
+  final bool ok;
+  final String? error;
+  final List<AnnouncementItem> items;
+
+  const AnnouncementResult.ok(this.items)
+      : ok = true,
+        error = null;
+  const AnnouncementResult.fail(this.error)
+      : ok = false,
+        items = const [];
+}
+
+// ------------------------------------------------------------------ Phiếu lương
+
+class Payslip {
+  final double hourlyRate;
+  final double gross;
+  final int workDays;
+  final int absentDays;
+  final int paidLeaveDays;
+  final int unpaidLeaveDays;
+  final int missingCheckOut;
+  final int annualLeaveUsed;
+  final int annualLeaveQuota;
+  final double regularHours;
+  final double otHours;
+  final double weekendHours;
+  final double holidayWorkedHours;
+  final double holidayPaidHours;
+  final double paidLeaveHours;
+
+  const Payslip({
+    required this.hourlyRate,
+    required this.gross,
+    required this.workDays,
+    required this.absentDays,
+    required this.paidLeaveDays,
+    required this.unpaidLeaveDays,
+    required this.missingCheckOut,
+    required this.annualLeaveUsed,
+    required this.annualLeaveQuota,
+    required this.regularHours,
+    required this.otHours,
+    required this.weekendHours,
+    required this.holidayWorkedHours,
+    required this.holidayPaidHours,
+    required this.paidLeaveHours,
+  });
+
+  factory Payslip.fromJson(Map<String, dynamic> j) {
+    double d(String k) => (j[k] as num).toDouble();
+    int i(String k) => (j[k] as num).toInt();
+    return Payslip(
+      hourlyRate: d('hourlyRate'),
+      gross: d('gross'),
+      workDays: i('workDays'),
+      absentDays: i('absentDays'),
+      paidLeaveDays: i('paidLeaveDays'),
+      unpaidLeaveDays: i('unpaidLeaveDays'),
+      missingCheckOut: i('missingCheckOut'),
+      annualLeaveUsed: i('annualLeaveUsed'),
+      annualLeaveQuota: i('annualLeaveQuota'),
+      regularHours: d('regularHours'),
+      otHours: d('otHours'),
+      weekendHours: d('weekendHours'),
+      holidayWorkedHours: d('holidayWorkedHours'),
+      holidayPaidHours: d('holidayPaidHours'),
+      paidLeaveHours: d('paidLeaveHours'),
+    );
+  }
+}
+
+class PayslipResult {
+  final bool ok;
+  final String? error;
+  final Payslip? slip;
+
+  const PayslipResult.ok(this.slip)
+      : ok = true,
+        error = null;
+  const PayslipResult.fail(this.error)
+      : ok = false,
+        slip = null;
 }

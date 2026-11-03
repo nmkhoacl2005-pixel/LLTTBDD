@@ -37,10 +37,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Future<void> _onResult(ScanResult result) async {
-    final list = await _repo.history();
     if (!mounted) return;
     setState(() {
-      _history = list;
+      if (!result.alreadyDone) {
+        _history = [result.record, ..._history].take(50).toList();
+      }
       _last = result.record;
       _alreadyDone = result.alreadyDone;
     });

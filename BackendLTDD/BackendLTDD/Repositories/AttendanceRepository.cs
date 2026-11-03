@@ -75,7 +75,7 @@ public class AttendanceRepository(
             .Where(a => a.Code == code && a.Time >= start && a.Time < end)
             .OrderBy(a => a.Time).ToListAsync();
 
-        return rows.GroupBy(a => a.Time.Date).OrderBy(g => g.Key).Select(g =>
+        var list = rows.GroupBy(a => a.Time.Date).OrderBy(g => g.Key).Select(g =>
         {
             var times = g.Select(a => a.Time).ToList();
             var cin = times.First();
@@ -89,5 +89,44 @@ public class AttendanceRepository(
                 IsEarlyLeave = cout != null && sch.IsEarlyLeave(cout.Value),
             };
         }).ToList();
+
+        // Thêm các ngày không quét: ngày lễ, nghỉ phép, vắng
+        var worked = list.Select(x => x.Date).ToHashSet();
+        var holidays = await db.Holidays.Where(h => h.Date >= start && h.Date < end)
+            .ToDictionaryAsync(h => h.Date.Date, h => h.Name);
+        var leaves = await db.LeaveRequests
+            .Where(l => l.Code == code && l.Status == "Approved" && l.FromDate < end && l.ToDate >= start)
+            .ToListAsync();
+        var firstScan = await db.Attendances.Where(a => a.Code == code)
+            .MinAsync(a => (DateTime?)a.Time);
+        var today = DateTime.Today;
+
+        for (var day = start; day < end; day = day.AddDays(1))
+        {
+            if (worked.Contains(day)) continue;
+
+            if (holidays.TryGetValue(day, out var holidayName))
+            {
+                list.Add(new DayDto { Date = day, Kind = "Holiday", Label = holidayName });
+                continue;
+            }
+            if (day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) continue;
+
+            var leave = leaves.FirstOrDefault(l => l.FromDate.Date <= day && l.ToDate.Date >= day);
+            if (leave != null)
+            {
+                list.Add(new DayDto
+                {
+                    Date = day,
+                    Kind = "Leave",
+                    Label = "Nghỉ " + leave.Type.ToLowerInvariant(),
+                });
+                continue;
+            }
+            if (day < today && firstScan != null && day >= firstScan.Value.Date)
+                list.Add(new DayDto { Date = day, Kind = "Absent", Label = "Vắng không phép" });
+        }
+
+        return list.OrderBy(x => x.Date).ToList();
     }
 }

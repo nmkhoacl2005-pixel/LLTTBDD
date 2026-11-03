@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'AddEmployeeScreen.dart';
 import 'AttendanceScreen.dart';
+import 'DashboardScreen.dart';
 import 'BluetoothService.dart';
 import 'DeleteEmployeeScreen.dart';
 import 'EditEmployeeScreen.dart';
 import 'MonthlyReportScreen.dart';
 import 'ScheduleSettingsScreen.dart';
 import 'DuplicateDeviceScreen.dart';
+import 'HolidayScreen.dart';
+import 'LeaveApprovalScreen.dart';
+import 'PayrollScreen.dart';
+import 'AnnouncementScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,9 +32,13 @@ class _HomeScreenState extends State<HomeScreen> {
     MonthlyReportScreen(), // giao diện chi tiết chấm công theo tháng
     ScheduleSettingsScreen(), // giao diện cài đặt giờ làm
     DuplicateDeviceScreen(),
+    HolidayScreen(), // quản lý ngày lễ
+    LeaveApprovalScreen(), // duyệt đơn xin nghỉ
+    PayrollScreen(), // bảng lương tháng
+    AnnouncementScreen(), // viết thông báo cho nhân viên
   ];
-
   final List<String> _titles = const [
+    'Tổng quan',
     'Chấm công',
     'Thêm nhân viên',
     'Sửa nhân viên',
@@ -37,7 +46,62 @@ class _HomeScreenState extends State<HomeScreen> {
     'Báo cáo tháng',
     'Giờ làm việc',
     'Cảnh báo trùng máy',
+    'Ngày lễ',
+    'Duyệt đơn nghỉ',
+    'Bảng lương',
+    'Thông báo',
   ];
+
+  final List<IconData> _icons = const [
+    Icons.dashboard,
+    Icons.access_time,
+    Icons.person_add,
+    Icons.edit,
+    Icons.delete,
+    Icons.calendar_month,
+    Icons.schedule,
+    Icons.warning_amber_rounded,
+    Icons.celebration,
+    Icons.event_busy,
+    Icons.payments,
+    Icons.campaign,
+  ];
+
+  /// Tab 0 = Tổng quan (cần callback nên không nằm trong _widgetOptions const),
+  /// các tab còn lại lấy từ _widgetOptions với chỉ số lùi 1
+  Widget _body() {
+    if (_selectedIndex == 0) return DashboardScreen(onNavigate: _onItemTapped);
+    return _widgetOptions.elementAt(_selectedIndex - 1);
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          children: [
+            const ListTile(
+              title: Text(
+                'Quản lý chấm công',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const Divider(),
+            for (var i = 0; i < _titles.length; i++)
+              ListTile(
+                leading: Icon(_icons[i]),
+                title: Text(_titles[i]),
+                selected: i == _selectedIndex,
+                selectedColor: Colors.indigo,
+                onTap: () {
+                  Navigator.pop(context);
+                  _onItemTapped(i);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _onItemTapped(int index) {
     // hàm chuyển đổi giữa các tab
@@ -79,8 +143,10 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(_titles[_selectedIndex]),
         actions: [_stationButton()],
       ),
-      body: _widgetOptions.elementAt(_selectedIndex),
-      bottomNavigationBar: BottomNavigationBar(
+drawer: _buildDrawer(),
+      body: _body(),
+bottomNavigationBar: null,
+/* bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -116,8 +182,8 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedItemColor: Colors.indigo,
         selectedFontSize: 11,
         unselectedFontSize: 11,
-        onTap: _onItemTapped,
-      ),
+                onTap: _onItemTapped,
+      ), */
     );
   }
 }

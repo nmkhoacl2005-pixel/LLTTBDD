@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'CommonWidgets.dart';
 import 'EmployeeRepository.dart';
+import 'QrScanPage.dart';
 import 'WorkSchedule.dart';
 
 /// Tab 4: chi tiết chấm công của 1 nhân viên theo tháng
@@ -50,6 +51,26 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
       _days = days;
       _loading = false;
     });
+  }
+
+  Future<void> _scanQr() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScanPage()),
+    );
+    if (!mounted || code == null) return;
+    if (!_employees.any((e) => e.key == code)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Không tìm thấy nhân viên có mã $code"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _code = code);
+    _loadDays();
   }
 
   void _changeMonth(int delta) {
@@ -121,8 +142,66 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
     );
   }
 
+  Widget _offDayCard(DaySummary d) {
+    final MaterialColor c = d.kind == 'Leave'
+        ? Colors.blue
+        : d.kind == 'Holiday'
+        ? Colors.purple
+        : Colors.red;
+    final tag = d.kind == 'Leave'
+        ? 'Nghỉ'
+        : d.kind == 'Holiday'
+        ? 'Ngày lễ'
+        : 'Vắng';
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: c.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    two(d.date.day),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: c.shade700,
+                    ),
+                  ),
+                  Text(
+                    _weekdays[d.date.weekday - 1],
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                d.label,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            _chip(StatusInfo(tag, c)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _dayCard(DaySummary d) {
-    final inStatus = _schedule.inStatus(d.checkIn);
+    if (!d.isWork) return _offDayCard(d);
+    final inStatus = _schedule.inStatus(d.checkIn!);
     final StatusInfo outStatus = d.checkOut == null
         ? const StatusInfo('Chưa quét ra', Colors.grey)
         : _schedule.outStatus(d.checkOut!);
@@ -191,7 +270,12 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
     }
 
     final days = _days;
-    final lateCount = days.where((d) => _schedule.isLate(d.checkIn)).length;
+    final workCount = days.where((d) => d.isWork).length;
+    final leaveCount = days.where((d) => d.kind == 'Leave').length;
+    final absentCount = days.where((d) => d.kind == 'Absent').length;
+    final holidayCount = days.where((d) => d.kind == 'Holiday').length;
+    final lateCount =
+        days.where((d) => d.isWork && _schedule.isLate(d.checkIn!)).length;
     final earlyCount = days
         .where((d) => d.checkOut != null && _schedule.isEarlyLeave(d.checkOut!))
         .length;
@@ -230,6 +314,18 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
               _loadDays();
             },
           ),
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            onPressed: _scanQr,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text("Quét QR để chọn"),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -251,11 +347,21 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
           ),
           Row(
             children: [
-              _statBox("Ngày công", days.length, Colors.indigo),
+              _statBox("Ngày công", workCount, Colors.indigo),
               const SizedBox(width: 10),
               _statBox("Đi trễ", lateCount, Colors.orange),
               const SizedBox(width: 10),
               _statBox("Về sớm", earlyCount, Colors.deepOrange),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _statBox("Nghỉ", leaveCount, Colors.blue),
+              const SizedBox(width: 10),
+              _statBox("Vắng", absentCount, Colors.red),
+              const SizedBox(width: 10),
+              _statBox("Ngày lễ", holidayCount, Colors.purple),
             ],
           ),
           const SizedBox(height: 16),

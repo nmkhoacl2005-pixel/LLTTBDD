@@ -40,6 +40,8 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   http: ^1.2.0
   flutter_dotenv: ^5.1.0
+  firebase_messaging: ^17.0.1
+  firebase_core: ^5.1.0
 
 dev_dependencies:
   flutter_test:

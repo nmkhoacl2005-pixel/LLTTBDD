@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'CommonWidgets.dart';
 import 'EmployeeRepository.dart';
+import 'QrScanPage.dart';
 
 /// Tab 4: chọn nhân viên từ danh sách -> hỏi xác nhận -> xác nhận mới xóa
 class DeleteEmployeeScreen extends StatefulWidget {
@@ -32,6 +33,25 @@ class _DeleteEmployeeScreenState extends State<DeleteEmployeeScreen> {
       _employees = list;
       _count = list.length;
     });
+  }
+
+  Future<void> _scanQr() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScanPage()),
+    );
+    if (!mounted || code == null) return;
+    if (!_employees.any((e) => e.key == code)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Không tìm thấy nhân viên có mã $code"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _code = code);
   }
 
   Future<void> _delete() async {
@@ -167,6 +187,18 @@ class _DeleteEmployeeScreenState extends State<DeleteEmployeeScreen> {
               employees: _employees,
               value: _code,
               onChanged: (v) => setState(() => _code = v),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.tonalIcon(
+              onPressed: _scanQr,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text("Quét QR để chọn"),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(

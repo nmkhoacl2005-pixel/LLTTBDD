@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mayb/HomeScreen.dart';
 import 'AuthStorage.dart';
 import 'BleClient.dart';
+import 'PushService.dart'; // Thêm PushService
 
 class ActivateScreen extends StatefulWidget {
   final String? message; // ví dụ: thông báo bị hủy liên kết
@@ -42,6 +43,10 @@ class _ActivateScreenState extends State<ActivateScreen> {
 
     if (r.ok && r.token != null) {
       await AuthStorage.save(code, r.token!, r.name ?? code);
+
+      // Gọi khởi tạo PushService để xin quyền và gửi FCM Token lên server
+      await PushService.instance.init();
+
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -139,7 +144,7 @@ class _ActivateScreenState extends State<ActivateScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.link),
-                  label: Text(_busy ? 'Đang tìm máy trạm...' : 'Đang kích hoạt...'),
+                  label: Text(_busy ? 'Đang tìm máy trạm...' : 'Kích hoạt'), // Chỉnh sửa lại text cho hợp lý
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

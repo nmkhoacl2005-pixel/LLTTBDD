@@ -18,12 +18,12 @@ public class EmployeeRepository(ApplicationDbContext db) : IEmployeeRepository
 
     public async Task<List<EmployeeDto>> GetAllAsync() =>
         await db.Employees.OrderBy(e => e.Id)
-            .Select(e => new EmployeeDto { Code = e.Code, Name = e.Name, Bound = e.DeviceId != null })
+            .Select(e => new EmployeeDto { Code = e.Code, Name = e.Name, Bound = e.DeviceId != null, HourlyRate = e.HourlyRate })
             .ToListAsync();
 
     public async Task<EmployeeDto?> GetByCodeAsync(string code) =>
         await db.Employees.Where(e => e.Code == code)
-            .Select(e => new EmployeeDto { Code = e.Code, Name = e.Name, Bound = e.DeviceId != null })
+            .Select(e => new EmployeeDto { Code = e.Code, Name = e.Name, Bound = e.DeviceId != null, HourlyRate = e.HourlyRate })
             .FirstOrDefaultAsync();
 
     public async Task<bool> AddAsync(string code, string name, string password)
@@ -39,6 +39,15 @@ public class EmployeeRepository(ApplicationDbContext db) : IEmployeeRepository
         var e = await db.Employees.FirstOrDefaultAsync(x => x.Code == code);
         if (e == null) return false;
         e.Name = name;
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> SetHourlyRateAsync(string code, decimal rate)
+    {
+        var e = await db.Employees.FirstOrDefaultAsync(x => x.Code == code);
+        if (e == null) return false;
+        e.HourlyRate = rate;
         await db.SaveChangesAsync();
         return true;
     }

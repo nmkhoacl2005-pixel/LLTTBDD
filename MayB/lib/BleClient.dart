@@ -54,20 +54,139 @@ class BleClient {
       if (res.statusCode != 200) return ReportResult.fail(_apiError(res));
       final list = jsonDecode(utf8.decode(res.bodyBytes)) as List;
       return ReportResult.ok(list.map((e) {
-        final ci = DateTime.parse(e['checkIn']);
+        final ci = e['checkIn'] == null ? null : DateTime.parse(e['checkIn']);
         final co = e['checkOut'] == null ? null : DateTime.parse(e['checkOut']);
         return DayRecord(
           day: DateTime.parse(e['date']).day,
-          inSec: _sec(ci),
+          inSec: ci == null ? null : _sec(ci),
           outSec: co == null ? null : _sec(co),
           late: e['isLate'] == true,
           early: e['isEarlyLeave'] == true,
+          kind: (e['kind'] ?? 'Work').toString(),
+          label: (e['label'] ?? '').toString(),
         );
       }).toList());
     } on TimeoutException {
       return ReportResult.fail('Hết thời gian chờ server phản hồi');
     } catch (_) {
       return ReportResult.fail('Không kết nối được server');
+    }
+  }
+
+  /// Gửi đơn xin nghỉ (gọi API trực tiếp, không qua máy trạm)
+  Future<BleResult> sendLeave(
+      DateTime from, DateTime to, String type, String reason) async {
+    final code = await AuthStorage.code();
+    final token = await AuthStorage.token();
+    if (code == null || token == null) return BleResult.fail('Chưa kích hoạt máy');
+    final id = await AuthStorage.deviceId();
+    try {
+      final res = await _post('/api/device/leave', {
+        'code': code,
+        'token': token,
+        'deviceId': id,
+        'fromDate': _ymd(from),
+        'toDate': _ymd(to),
+        'type': type,
+        'reason': reason,
+      });
+      if (res.statusCode != 200) return BleResult.fail(_apiError(res));
+      return const BleResult(ok: true);
+    } on TimeoutException {
+      return BleResult.fail('Hết thời gian chờ server phản hồi');
+    } catch (_) {
+      return BleResult.fail('Không kết nối được server');
+    }
+  }
+
+  /// Danh sách đơn nghỉ của mình
+  Future<LeaveResult> myLeaves() async {
+    final code = await AuthStorage.code();
+    final token = await AuthStorage.token();
+    if (code == null || token == null) return const LeaveResult.fail('Chưa kích hoạt máy');
+    final id = await AuthStorage.deviceId();
+    try {
+      final res = await _post(
+          '/api/device/leaves', {'code': code, 'token': token, 'deviceId': id});
+      if (res.statusCode != 200) return LeaveResult.fail(_apiError(res));
+      final list = jsonDecode(utf8.decode(res.bodyBytes)) as List;
+      return LeaveResult.ok(list
+          .map((e) => LeaveItem(
+        from: DateTime.parse(e['fromDate']),
+        to: DateTime.parse(e['toDate']),
+        type: e['type'].toString(),
+        reason: e['reason'].toString(),
+        status: e['status'].toString(),
+      ))
+          .toList());
+    } on TimeoutException {
+      return const LeaveResult.fail('Hết thời gian chờ server phản hồi');
+    } catch (_) {
+      return const LeaveResult.fail('Không kết nối được server');
+    }
+  }
+
+  /// Phiếu lương của mình trong 1 tháng (gọi API trực tiếp)
+  Future<PayslipResult> payslip(int year, int month) async {
+    final code = await AuthStorage.code();
+    final token = await AuthStorage.token();
+    if (code == null || token == null) return const PayslipResult.fail('Chưa kích hoạt máy');
+    final id = await AuthStorage.deviceId();
+    try {
+      final res = await _post('/api/device/payslip',
+          {'code': code, 'token': token, 'deviceId': id, 'year': year, 'month': month});
+      if (res.statusCode != 200) return PayslipResult.fail(_apiError(res));
+      final m = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      return PayslipResult.ok(Payslip.fromJson(m));
+    } on TimeoutException {
+      return const PayslipResult.fail('Hết thời gian chờ server phản hồi');
+    } catch (_) {
+      return const PayslipResult.fail('Không kết nối được server');
+    }
+  }
+
+  /// Gửi token FCM của máy này lên server
+  Future<BleResult> saveFcmToken(String fcmToken) async {
+    final code = await AuthStorage.code();
+    final token = await AuthStorage.token();
+    if (code == null || token == null) return BleResult.fail('Chưa kích hoạt máy');
+    final id = await AuthStorage.deviceId();
+    try {
+      final res = await _post('/api/device/fcm',
+          {'code': code, 'token': token, 'deviceId': id, 'fcmToken': fcmToken});
+      if (res.statusCode >= 300) return BleResult.fail(_apiError(res));
+      return const BleResult(ok: true);
+    } on TimeoutException {
+      return BleResult.fail('Hết thời gian chờ server phản hồi');
+    } catch (_) {
+      return BleResult.fail('Không kết nối được server');
+    }
+  }
+
+  /// Thông báo của quản lý
+  Future<AnnouncementResult> announcements() async {
+    final code = await AuthStorage.code();
+    final token = await AuthStorage.token();
+    if (code == null || token == null) {
+      return const AnnouncementResult.fail('Chưa kích hoạt máy');
+    }
+    final id = await AuthStorage.deviceId();
+    try {
+      final res = await _post('/api/device/announcements',
+          {'code': code, 'token': token, 'deviceId': id});
+      if (res.statusCode != 200) return AnnouncementResult.fail(_apiError(res));
+      final list = jsonDecode(utf8.decode(res.bodyBytes)) as List;
+      return AnnouncementResult.ok(list
+          .map((e) => AnnouncementItem(
+        title: e['title'].toString(),
+        body: e['body'].toString(),
+        time: DateTime.parse(e['createdAt']),
+      ))
+          .toList());
+    } on TimeoutException {
+      return const AnnouncementResult.fail('Hết thời gian chờ server phản hồi');
+    } catch (_) {
+      return const AnnouncementResult.fail('Không kết nối được server');
     }
   }
 
@@ -86,6 +205,9 @@ class BleClient {
   }
 
   int _sec(DateTime d) => d.hour * 3600 + d.minute * 60 + d.second;
+
+  String _ymd(DateTime d) =>
+      "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   Future<BleResult> _single(String payload) async {
     try {
@@ -151,7 +273,7 @@ class BleClient {
     for (var i = 0; i < 3; i++) {
       try {
         await d.connect(timeout: const Duration(seconds: 10), mtu: null);
-        await Future.delayed(const Duration(milliseconds: 600));
+        await Future.delayed(const Duration(milliseconds: 150)); //<----
         final services = await d.discoverServices();
         try {
           await d.requestMtu(247);
@@ -229,11 +351,7 @@ class BleClient {
       throw BleException('Lỗi Bluetooth: $e');
     } finally {
       await sub?.cancel();
-      try {
-        await device?.disconnect();
-      } catch (_) {}
-      // Cho máy trạm thời gian quảng bá lại trước phiên kế tiếp
-      await Future.delayed(const Duration(milliseconds: 700));
+      device?.disconnect().catchError((_) {}); // không chờ ngắt xong mới trả kết quả
       _busy = false;
     }
   }

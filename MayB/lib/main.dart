@@ -1,14 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:mayb/HomeScreen.dart';
 import 'ActivateScreen.dart';
 import 'AuthStorage.dart';
+import 'PushService.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
+
+  // Try-catch để nếu thiếu google-services.json app vẫn không bị đen thui
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Lỗi Firebase: $e');
+  }
+
   final activated = await AuthStorage.isActivated();
+
+  // Phải cho app vẽ giao diện lên trước
   runApp(MyApp(activated: activated));
+
+  // Xin quyền và lấy token CHẠY NGẦM sau khi app đã lên hình
+  if (activated) {
+    PushService.instance.init().catchError((e) => debugPrint('Lỗi Push: $e'));
+  }
 }
 
 class MyApp extends StatelessWidget {

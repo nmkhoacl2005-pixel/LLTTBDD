@@ -20,6 +20,8 @@ class BluetoothService {
   bool _starting = false;
   bool _initialized = false;
   final Set<String> _devices = {};
+  bool _open = false; // máy trạm đang mở (không phụ thuộc callback quảng bá)
+  final Map<String, int> _mtu = {};
 
   /// true = máy trạm đang mở (đang phát tín hiệu)
   final ValueNotifier<bool> running = ValueNotifier<bool>(false);
@@ -42,7 +44,7 @@ class BluetoothService {
   Future<void> _handle(String deviceId, String raw) async {
     final reply = await CheckInHandler.instance.handle(raw);
     final bytes = utf8.encode(reply);
-    const chunk = 20;
+    final chunk = ((_mtu[deviceId] ?? 23) - 3).clamp(20, 200).toInt();
     try {
       for (var i = 0; i < bytes.length; i += chunk) {
         final end = (i + chunk < bytes.length) ? i + chunk : bytes.length;
@@ -51,7 +53,9 @@ class BluetoothService {
           value: Uint8List.fromList(bytes.sublist(i, end)),
           deviceId: deviceId,
         );
-        await Future.delayed(const Duration(milliseconds: 25));
+        if (end < bytes.length) {
+          await Future.delayed(const Duration(milliseconds: 25));
+        };
       }
     } catch (e) {
       debugPrint("Lỗi gửi kết quả: $e");
@@ -88,12 +92,16 @@ class BluetoothService {
         BlePeripheral.setConnectionStateChangeCallback((deviceId, isConnected) {
           if (isConnected) {
             _devices.add(deviceId);
+            _readvertise(); // phát tiếp ngay để máy khác kết nối song song
           } else {
             _devices.remove(deviceId);
+            _mtu.remove(deviceId);
             _restartAdvertising();
           }
           connected.value = _devices.isNotEmpty;
         });
+
+        BlePeripheral.setMtuChangeCallback((deviceId, mtu) => _mtu[deviceId] = mtu);
 
         BlePeripheral.setWriteRequestCallback(
                 (deviceId, characteristicId, offset, value) {
@@ -131,6 +139,7 @@ class BluetoothService {
         services: [serviceUuid],
         localName: "CC-Tram",
       );
+      _open = true;
       running.value = true;
       status.value = "Máy trạm đang mở - chờ nhân viên";
     } catch (e) {
@@ -145,15 +154,26 @@ class BluetoothService {
     try {
       await BlePeripheral.stopAdvertising();
     } catch (_) {}
+    _open = false;
     _devices.clear();
     connected.value = false;
     running.value = false;
     status.value = "Máy trạm đang đóng";
   }
 
+  Future<void> _readvertise() async {
+    if (!_open) return;
+    try {
+      await BlePeripheral.startAdvertising(
+        services: [serviceUuid],
+        localName: "CC-Tram",
+      );
+    } catch (_) {} // đang phát rồi thì bỏ qua
+  }
+
   Future<void> _restartAdvertising() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!running.value) return; // máy trạm đã đóng thì thôi
+    await Future.delayed(const Duration(milliseconds: 150));
+    if (!_open) return; // máy trạm đã đóng thì thôi
     try {
       await BlePeripheral.stopAdvertising();
     } catch (_) {}

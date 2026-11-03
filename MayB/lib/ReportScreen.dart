@@ -123,7 +123,63 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  Widget _offDayCard(DayRecord d) {
+    final date = DateTime(_month.year, _month.month, d.day);
+    final MaterialColor c = d.kind == 'Leave'
+        ? Colors.blue
+        : d.kind == 'Holiday'
+        ? Colors.purple
+        : Colors.red;
+    final tag = d.kind == 'Leave'
+        ? 'Nghỉ'
+        : d.kind == 'Holiday'
+        ? 'Ngày lễ'
+        : 'Vắng';
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: c.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    two(d.day),
+                    style: TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold, color: c.shade700),
+                  ),
+                  Text(
+                    _weekdays[date.weekday - 1],
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                d.label,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            _chip(tag, c),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _dayCard(DayRecord d) {
+    if (!d.isWork) return _offDayCard(d);
     final date = DateTime(_month.year, _month.month, d.day);
     return Card(
       margin: EdgeInsets.zero,
@@ -222,6 +278,10 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final workCount = _days.where((d) => d.isWork).length;
+    final leaveCount = _days.where((d) => d.kind == 'Leave').length;
+    final absentCount = _days.where((d) => d.kind == 'Absent').length;
+    final holidayCount = _days.where((d) => d.kind == 'Holiday').length;
     final lateCount = _days.where((d) => d.late).length;
     final earlyCount = _days.where((d) => d.early).length;
 
@@ -254,11 +314,21 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
           Row(
             children: [
-              _statBox("Ngày công", _days.length, Colors.indigo),
+              _statBox("Ngày công", workCount, Colors.indigo),
               const SizedBox(width: 10),
               _statBox("Đi trễ", lateCount, Colors.orange),
               const SizedBox(width: 10),
               _statBox("Về sớm", earlyCount, Colors.deepOrange),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _statBox("Nghỉ", leaveCount, Colors.blue),
+              const SizedBox(width: 10),
+              _statBox("Vắng", absentCount, Colors.red),
+              const SizedBox(width: 10),
+              _statBox("Ngày lễ", holidayCount, Colors.purple),
             ],
           ),
           const SizedBox(height: 16),

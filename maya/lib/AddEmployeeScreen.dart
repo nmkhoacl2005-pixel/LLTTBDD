@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'CommonWidgets.dart';
 import 'EmployeeRepository.dart';
 
@@ -222,6 +223,19 @@ class _ManualAddDialogState extends State<_ManualAddDialog> {
     Navigator.pop(context, _NewEmployee(code, name, pass));
   }
 
+  /// Mở trang quét QR, nhận mã nhân viên trả về rồi tự điền vào ô mã
+  Future<void> _scanQr() async {
+    final value = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const _QrScanPage()),
+    );
+    if (!mounted || value == null) return;
+    setState(() {
+      _codeCtrl.text = value;
+      _codeError = null;
+    });
+  }
+
   @override
   void dispose() {
     _codeCtrl.dispose();
@@ -251,6 +265,10 @@ class _ManualAddDialogState extends State<_ManualAddDialog> {
             decoration: InputDecoration(
               labelText: "Mã nhân viên (10–12 chữ số)",
               prefixIcon: const Icon(Icons.badge_outlined),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.qr_code_scanner),
+                onPressed: _scanQr,
+              ),
               errorText: _codeError,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -304,6 +322,38 @@ class _ManualAddDialogState extends State<_ManualAddDialog> {
           child: const Text("Xác nhận"),
         ),
       ],
+    );
+  }
+}
+
+/// Trang quét QR: chỉ nhận chuỗi khớp _employeeCodeRule (10–12 chữ số), mã sai thì bỏ qua và quét tiếp
+class _QrScanPage extends StatefulWidget {
+  const _QrScanPage();
+
+  @override
+  State<_QrScanPage> createState() => _QrScanPageState();
+}
+
+class _QrScanPageState extends State<_QrScanPage> {
+  bool _done = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Quét mã QR nhân viên")),
+      body: MobileScanner(
+        onDetect: (capture) {
+          if (_done) return;
+          for (final b in capture.barcodes) {
+            final v = b.rawValue?.trim();
+            if (v != null && _employeeCodeRule.hasMatch(v)) {
+              _done = true;
+              Navigator.pop(context, v);
+              return;
+            }
+          }
+        },
+      ),
     );
   }
 }

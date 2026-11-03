@@ -6,4 +6,5 @@ public class EmployeeDto
     public string Name { get; set; } = "";
     /// true = đã liên kết điện thoại
     public bool Bound { get; set; }
+    public decimal HourlyRate { get; set; }
 }

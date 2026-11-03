@@ -9,6 +9,7 @@ public interface IEmployeeRepository
     Task<EmployeeDto?> GetByCodeAsync(string code);
     Task<bool> AddAsync(string code, string name, string password);
     Task<bool> UpdateNameAsync(string code, string name);
+    Task<bool> SetHourlyRateAsync(string code, decimal rate);
     Task<bool> DeleteAsync(string code);
 
     /// Đặt lại mật khẩu, đồng thời hủy liên kết máy cũ
